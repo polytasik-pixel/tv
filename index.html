@@ -5,21 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>POLYTRON EV SERVICE - MONITOR TV RUANG TUNGGU</title>
   
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
   <!-- MQTT.js CDN untuk Realtime Sync Antar Perangkat (HP ke Layar TV) -->
+  <script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
   <style>
     /* ============================================================== */
-    /* 1. RESET LAYAR PENUH 100VH & KUNCI SCROLL PADA TV MONITOR      */
+    /* STANDALONE PURE CSS - 100% MANDIRI & TAHAN BANTING DI SMART TV */
+    /* Berfungsi penuh meskipun CDN luar diblokir atau TV browser jadul */
     /* ============================================================== */
     *, *::before, *::after {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
     
     html, body {
@@ -32,7 +30,7 @@
       padding: 0 !important;
       background-color: #380202 !important;
       background: radial-gradient(circle at top right, #6b0c0c 0%, #380202 55%, #180101 100%) !important;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
@@ -56,9 +54,99 @@
       margin-bottom: 0 !important;
     }
 
+    /* FLEXBOX & GRID STANDAR MURNI */
+    .flex { display: flex; }
+    .flex-col { flex-direction: column !important; }
+    .flex-row { flex-direction: row !important; }
+    .flex-wrap { flex-wrap: wrap !important; }
+    .items-center { align-items: center !important; }
+    .justify-between { justify-content: space-between !important; }
+    .justify-center { justify-content: center !important; }
+    .flex-1 { flex: 1 1 0% !important; }
+    .flex-shrink-0 { flex-shrink: 0 !important; }
+    .shrink-0 { flex-shrink: 0 !important; }
+    .self-start { align-self: flex-start !important; }
+    .inline-block { display: inline-block !important; }
+    .fixed { position: fixed !important; }
+    .bottom-3 { bottom: 0.75rem !important; }
+    .right-3 { right: 0.75rem !important; }
+    .z-50 { z-index: 50 !important; }
+    .transition-all { transition-property: all !important; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; }
+    .duration-300 { transition-duration: 300ms !important; }
+
+    .grid { display: grid !important; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+    
+    @media (min-width: 640px) {
+      .sm\:flex-nowrap { flex-wrap: nowrap !important; }
+      .sm\:gap-1\.5 { gap: 0.375rem !important; }
+      .sm\:gap-2\.5 { gap: 0.625rem !important; }
+      .sm\:h-8 { height: 2rem !important; }
+      .sm\:w-8 { width: 2rem !important; }
+      .sm\:p-1 { padding: 0.25rem !important; }
+      .sm\:px-0 { padding-left: 0 !important; padding-right: 0 !important; }
+      .sm\:px-2\.5 { padding-left: 0.625rem !important; padding-right: 0.625rem !important; }
+      .sm\:px-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+      .sm\:py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+      .sm\:py-1\.5 { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+      .sm\:text-\[8px\] { font-size: 8px !important; }
+      .sm\:text-\[9px\] { font-size: 9px !important; }
+      .sm\:text-\[10px\] { font-size: 10px !important; }
+      .sm\:text-\[11px\] { font-size: 11px !important; }
+      .sm\:text-xs { font-size: 0.75rem !important; line-height: 1rem !important; }
+      .sm\:text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+      .sm\:text-base { font-size: 1rem !important; line-height: 1.5rem !important; }
+      .sm\:text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+    }
+
+    @media (min-width: 768px) {
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:items-center { align-items: center !important; }
+      .md\:self-auto { align-self: auto !important; }
+      .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:text-base { font-size: 1rem !important; line-height: 1.5rem !important; }
+      .md\:text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+      .md\:text-xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+    }
+
+    @media (min-width: 1024px) {
+      .lg\:min-w-full { min-width: 100% !important; }
+      .lg\:text-xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+    }
+
+    /* GRID MATRIX TIMELINE KHUSUS TV (SABTU VS HARI BIASA) */
+    .tv-grid-reg-sat {
+      display: grid !important;
+      grid-template-columns: 90px repeat(6, 1fr) !important;
+      gap: 0.25rem !important;
+    }
+    .tv-grid-reg-norm {
+      display: grid !important;
+      grid-template-columns: 90px repeat(8, 1fr) !important;
+      gap: 0.25rem !important;
+    }
+    .tv-grid-exp-sat {
+      display: grid !important;
+      grid-template-columns: 90px repeat(12, 1fr) !important;
+      gap: 0.125rem !important;
+    }
+    .tv-grid-exp-norm {
+      display: grid !important;
+      grid-template-columns: 90px repeat(16, 1fr) !important;
+      gap: 0.125rem !important;
+    }
+
+    @media (min-width: 640px) {
+      .tv-grid-reg-sat { grid-template-columns: 105px repeat(6, 1fr) !important; gap: 0.375rem !important; }
+      .tv-grid-reg-norm { grid-template-columns: 105px repeat(8, 1fr) !important; gap: 0.375rem !important; }
+      .tv-grid-exp-sat { grid-template-columns: 105px repeat(12, 1fr) !important; }
+      .tv-grid-exp-norm { grid-template-columns: 105px repeat(16, 1fr) !important; }
+    }
+
     /* RESPONSIVE DYNAMIC SLOT HEIGHTS - MENGISI LAYAR PENUH & RAPI */
     .stall-slot {
       transition: all 0.2s ease-in-out;
+      box-sizing: border-box !important;
     }
 
     .stall-slot-reg {
@@ -71,7 +159,164 @@
       min-height: 40px !important;
     }
 
-    /* Ticker Text Berjalan Otomatis Halus */
+    /* BACKGROUND COLORS */
+    .bg-white { background-color: #ffffff !important; }
+    .bg-slate-50 { background-color: #f8fafc !important; }
+    .bg-slate-100 { background-color: #f1f5f9 !important; }
+    .bg-slate-200 { background-color: #e2e8f0 !important; }
+    .bg-red-50 { background-color: #fef2f2 !important; }
+    .bg-red-600 { background-color: #dc2626 !important; }
+    .bg-amber-400 { background-color: #fbbf24 !important; }
+    .bg-amber-500 { background-color: #f59e0b !important; }
+    .bg-amber-600 { background-color: #d97706 !important; }
+    .bg-emerald-600 { background-color: #059669 !important; }
+    .bg-emerald-800 { background-color: #065f46 !important; }
+    .bg-cyan-800 { background-color: #155e75 !important; }
+    .bg-indigo-600 { background-color: #4f46e5 !important; }
+    .bg-indigo-900 { background-color: #312e81 !important; }
+    .bg-yellow-400 { background-color: #facc15 !important; }
+    .bg-rose-500 { background-color: #f43f5e !important; }
+    .bg-black\/40 { background-color: rgba(0, 0, 0, 0.4) !important; }
+    .bg-\[\#ea580c\] { background-color: #ea580c !important; }
+
+    /* BORDERS */
+    .border { border: 1px solid #e2e8f0 !important; }
+    .border-2 { border-width: 2px !important; border-style: solid !important; }
+    .border-b { border-bottom: 1px solid #e2e8f0 !important; }
+    .border-t { border-top: 1px solid #e2e8f0 !important; }
+    .border-y { border-top: 1px solid #e2e8f0 !important; border-bottom: 1px solid #e2e8f0 !important; }
+    .border-slate-200 { border-color: #e2e8f0 !important; }
+    .border-slate-300 { border-color: #cbd5e1 !important; }
+    .border-slate-400 { border-color: #94a3b8 !important; }
+    .border-red-200 { border-color: #fecaca !important; }
+    .border-red-500 { border-color: #ef4444 !important; }
+    .border-red-500\/30 { border-color: rgba(239, 68, 68, 0.3) !important; }
+    .border-amber-300 { border-color: #fcd34d !important; }
+    .border-amber-400\/30 { border-color: rgba(251, 191, 36, 0.3) !important; }
+    .border-cyan-400 { border-color: #22d3ee !important; }
+    .border-emerald-400 { border-color: #34d399 !important; }
+    .border-indigo-500 { border-color: #6366f1 !important; }
+
+    /* TEXT COLORS */
+    .text-white { color: #ffffff !important; }
+    .text-slate-950 { color: #020617 !important; }
+    .text-slate-900 { color: #0f172a !important; }
+    .text-slate-800 { color: #1e293b !important; }
+    .text-slate-700 { color: #334155 !important; }
+    .text-slate-600 { color: #475569 !important; }
+    .text-slate-500 { color: #64748b !important; }
+    .text-slate-400 { color: #94a3b8 !important; }
+    .text-slate-200 { color: #e2e8f0 !important; }
+    .text-red-600 { color: #dc2626 !important; }
+    .text-red-900 { color: #7f1d1d !important; }
+    .text-amber-200 { color: #fde68a !important; }
+    .text-amber-300 { color: #fcd34d !important; }
+    .text-amber-400 { color: #fbbf24 !important; }
+    .text-amber-600 { color: #d97706 !important; }
+    .text-amber-700 { color: #b45309 !important; }
+    .text-cyan-700 { color: #0e7490 !important; }
+    .text-emerald-700 { color: #047857 !important; }
+    .text-orange-200 { color: #fed7aa !important; }
+
+    /* TYPOGRAPHY */
+    .text-\[7px\] { font-size: 7px !important; }
+    .text-\[8px\] { font-size: 8px !important; }
+    .text-\[9px\] { font-size: 9px !important; }
+    .text-\[10px\] { font-size: 10px !important; }
+    .text-\[11px\] { font-size: 11px !important; }
+    .text-xs { font-size: 0.75rem !important; line-height: 1rem !important; }
+    .text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+    .text-base { font-size: 1rem !important; line-height: 1.5rem !important; }
+    .text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+    .text-xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+
+    .font-normal { font-weight: 400 !important; }
+    .font-medium { font-weight: 500 !important; }
+    .font-semibold { font-weight: 600 !important; }
+    .font-bold { font-weight: 700 !important; }
+    .font-extrabold { font-weight: 800 !important; }
+    .font-black { font-weight: 900 !important; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
+
+    .uppercase { text-transform: uppercase !important; }
+    .text-center { text-align: center !important; }
+    .text-left { text-align: left !important; }
+    .tracking-tight { letter-spacing: -0.025em !important; }
+    .tracking-wide { letter-spacing: 0.025em !important; }
+    .tracking-wider { letter-spacing: 0.05em !important; }
+    .truncate { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+    .whitespace-nowrap { white-space: nowrap !important; }
+    .leading-none { line-height: 1 !important; }
+    .leading-tight { line-height: 1.25 !important; }
+
+    /* PADDINGS & GAPS */
+    .p-0\.5 { padding: 0.125rem !important; }
+    .p-1 { padding: 0.25rem !important; }
+    .px-0\.5 { padding-left: 0.125rem !important; padding-right: 0.125rem !important; }
+    .px-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+    .px-1\.5 { padding-left: 0.375rem !important; padding-right: 0.375rem !important; }
+    .px-2 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+    .px-2\.5 { padding-left: 0.625rem !important; padding-right: 0.625rem !important; }
+    .px-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+    .py-0\.2 { padding-top: 1px !important; padding-bottom: 1px !important; }
+    .py-0\.5 { padding-top: 0.125rem !important; padding-bottom: 0.125rem !important; }
+    .py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+    .py-1\.5 { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+    .pl-1 { padding-left: 0.25rem !important; }
+    .pb-0\.5 { padding-bottom: 0.125rem !important; }
+    .pb-1 { padding-bottom: 0.25rem !important; }
+    .pt-0\.5 { padding-top: 0.125rem !important; }
+    .mt-0\.5 { margin-top: 0.125rem !important; }
+    .mb-0\.5 { margin-bottom: 0.125rem !important; }
+    .mb-1 { margin-bottom: 0.25rem !important; }
+    .ml-2 { margin-left: 0.5rem !important; }
+    .mr-0\.5 { margin-right: 0.125rem !important; }
+    .pr-12 { padding-right: 3rem !important; }
+
+    .gap-0\.5 { gap: 0.125rem !important; }
+    .gap-1 { gap: 0.25rem !important; }
+    .gap-1\.5 { gap: 0.375rem !important; }
+    .gap-2 { gap: 0.5rem !important; }
+    .gap-2\.5 { gap: 0.625rem !important; }
+
+    /* SIZES */
+    .w-full { width: 100% !important; }
+    .h-full { height: 100% !important; }
+    .w-2\.5 { width: 0.625rem !important; }
+    .h-2\.5 { height: 0.625rem !important; }
+    .w-3 { width: 0.75rem !important; }
+    .h-3 { height: 0.75rem !important; }
+    .w-3\.5 { width: 0.875rem !important; }
+    .h-3\.5 { height: 0.875rem !important; }
+    .w-4 { width: 1rem !important; }
+    .h-4 { height: 1rem !important; }
+    .w-7 { width: 1.75rem !important; }
+    .h-7 { height: 1.75rem !important; }
+    .w-8 { width: 2rem !important; }
+    .h-8 { height: 2rem !important; }
+    .max-w-md { max-width: 28rem !important; }
+    .max-w-full { max-width: 100% !important; }
+    .min-w-\[740px\] { min-width: 740px !important; }
+
+    .rounded-\[1px\] { border-radius: 1px !important; }
+    .rounded-\[2px\] { border-radius: 2px !important; }
+    .rounded-\[3px\] { border-radius: 3px !important; }
+    .rounded-\[4px\] { border-radius: 4px !important; }
+
+    .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important; }
+    .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important; }
+    .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important; }
+    .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important; }
+
+    .hidden { display: none !important; }
+    .overflow-hidden { overflow: hidden !important; }
+    .overflow-x-auto { overflow-x: auto !important; }
+    .select-none { user-select: none !important; }
+    .cursor-pointer { cursor: pointer !important; }
+    .cursor-default { cursor: default !important; }
+    .pointer-events-none { pointer-events: none !important; }
+
+    /* TICKER & PULSE */
     .tv-ticker-wrapper {
       position: relative;
       width: 100%;
@@ -89,7 +334,6 @@
       100% { transform: translateX(-50%); }
     }
 
-    /* Animasi Denyut Unit Checked-In / Tiba */
     .stall-checked-in {
       animation: pulse-checked 1.5s infinite;
     }
@@ -99,14 +343,9 @@
       50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
     }
 
-    /* Hide scrollbars */
-    ::-webkit-scrollbar {
-      display: none;
-    }
-    * {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
+    /* SCROLLBAR HIDING */
+    ::-webkit-scrollbar { display: none; }
+    * { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body class="select-none">
@@ -117,7 +356,7 @@
   <div id="tvContainer">
 
     <!-- 1. TOP HEADER PANEL (LOGO, CABANG, JAM, TANGGAL & STATUS SLOT) -->
-    <div class="bg-white border-b border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs space-y-0.5 rounded-[2px] flex-shrink-0">
+    <div class="bg-white border-b border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs rounded-[2px] flex-shrink-0">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-1.5">
         
         <!-- Logo & Nama Bengkel Service Center -->
@@ -127,21 +366,21 @@
             <h1 class="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-wider uppercase">POLYTRON EV SERVICE</h1>
             
             <!-- Link ke Aplikasi Lengkap (SA / Teknisi / Konsumen) -->
-            <a href="index_full_app.html" class="ml-2 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1 shadow-xs transition rounded-[2px]" title="Buka Aplikasi Lengkap (SA / Teknisi / Konsumen)">
-              <i data-lucide="layout-grid" class="w-3 h-3 text-red-600"></i>
+            <a href="index_full_app.html" class="ml-2 px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1 shadow-xs rounded-[2px]" title="Buka Aplikasi Lengkap (SA / Teknisi / Konsumen)">
+              <svg class="w-3 h-3 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
               <span>App Lengkap</span>
             </a>
 
             <!-- Tombol Layar Penuh (Fullscreen Toggle) -->
-            <button onclick="toggleFullScreen()" id="btnFullscreenToggle" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs transition rounded-[2px]" title="Mode Layar Penuh">
-              <i id="fsIcon" data-lucide="maximize" class="w-3 h-3 text-white"></i>
+            <button onclick="toggleFullScreen()" id="btnFullscreenToggle" class="px-2 py-0.5 bg-red-600 text-white font-bold text-xs flex items-center gap-1 shadow-xs rounded-[2px] cursor-pointer" title="Mode Layar Penuh">
+              <svg id="fsIcon" class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
               <span>Layar Penuh</span>
             </button>
           </div>
           
           <div class="flex flex-wrap items-center gap-2 mt-0.5">
-            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold rounded-[2px]">
-              <i data-lucide="map-pin" class="w-2.5 h-2.5"></i>
+            <span class="flex items-center gap-1 px-1.5 py-0.2 bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold rounded-[2px]">
+              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
               <span id="bannerSiteName">Polytron SC Tasikmalaya</span>
             </span>
             <span id="bannerSiteAddress" class="text-[11px] text-slate-500 truncate max-w-md">Jl. KHZ. Mustofa No. 280, Tasikmalaya</span>
@@ -153,16 +392,16 @@
           
           <!-- Tanggal Hari Ini (Nama Hari Huruf Kapital) -->
           <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
-            <i data-lucide="calendar" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+            <svg class="w-3 h-3 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
             <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
-              <span id="tvDayNameDisplay" class="text-red-600 uppercase tracking-wider">HARI, </span>
-              <span id="tvFullDateDisplay" class="text-slate-900 uppercase tracking-tight">TANGGAL</span>
+              <span id="tvDayNameDisplay" class="text-red-600 uppercase tracking-wider">SABTU, </span>
+              <span id="tvFullDateDisplay" class="text-slate-900 uppercase tracking-tight">17 OKTOBER 2026</span>
             </div>
           </div>
 
           <!-- Jam Live Waktu Bengkel (Format Sama dengan Tanggal) -->
           <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
-            <i data-lucide="clock" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+            <svg class="w-3 h-3 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
               <span class="text-slate-500 uppercase tracking-wider font-semibold text-[10px] sm:text-xs mr-0.5">WAKTU:</span>
               <span id="liveClock" class="font-mono font-bold text-red-600">08:30:00 WIB</span>
@@ -171,7 +410,7 @@
 
           <!-- Slot Terisi (Format Sama dengan Tanggal) -->
           <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
-            <i data-lucide="layers" class="w-3 h-3 text-slate-600 flex-shrink-0"></i>
+            <svg class="w-3 h-3 text-slate-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
             <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
               <span class="text-slate-500 uppercase tracking-wider font-semibold text-[10px] sm:text-xs mr-0.5">SLOT:</span>
               <span id="slotUsageDisplay" class="font-bold text-slate-900">0 / 22</span>
@@ -184,9 +423,9 @@
     </div>
 
     <!-- 2. BANNER RUNNING TEXT INFORMASI (TICKER BERJALAN HALUS) -->
-    <div class="bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#dc2626] border-y border-red-500/30 px-2.5 sm:px-3 py-0.5 shadow-xs flex items-center gap-2 overflow-hidden flex-shrink-0">
-      <div class="flex items-center gap-1.5 bg-black/40 text-amber-300 px-1.5 py-0.2 rounded-[2px] text-[9px] font-black tracking-wider uppercase whitespace-nowrap shrink-0 border border-amber-400/30 shadow-inner">
-        <i data-lucide="info" class="w-2.5 h-2.5 text-amber-400 animate-pulse"></i>
+    <div class="bg-red-600 border-y border-red-500/30 px-2.5 sm:px-3 py-0.5 shadow-xs flex items-center gap-2 overflow-hidden flex-shrink-0" style="background: linear-gradient(to right, #450a0a, #7f1d1d, #dc2626) !important;">
+      <div class="flex items-center gap-1.5 bg-black/40 text-amber-300 px-1.5 py-0.2 rounded-[2px] text-[9px] font-black tracking-wider uppercase whitespace-nowrap shrink-0 border border-amber-400/30">
+        <svg class="w-2.5 h-2.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <span>INFORMASI</span>
       </div>
       <div class="tv-ticker-wrapper flex-1 overflow-hidden">
@@ -198,9 +437,9 @@
     </div>
 
     <!-- 3. BANNER SIARAN PANGGILAN AKTIF (NOW CALLING BROADCAST) -->
-    <div id="activeCallBanner" class="bg-red-50 border border-red-500 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs flex items-center gap-2 sm:gap-2.5 transition rounded-[2px] flex-shrink-0">
-      <div class="w-7 h-7 sm:w-8 sm:h-8 bg-red-600 flex items-center justify-center text-white font-black animate-pulse flex-shrink-0 rounded-[2px]">
-        <i data-lucide="bell" class="w-4 h-4 sm:w-4.5 sm:h-4.5"></i>
+    <div id="activeCallBanner" class="bg-red-50 border border-red-500 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs flex items-center gap-2 sm:gap-2.5 rounded-[2px] flex-shrink-0">
+      <div class="w-7 h-7 sm:w-8 sm:h-8 bg-red-600 flex items-center justify-center text-white font-black flex-shrink-0 rounded-[2px]">
+        <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
       </div>
       <div class="flex-1 overflow-hidden">
         <div id="activeCallText" class="text-sm sm:text-base md:text-lg lg:text-xl font-black text-red-900 uppercase tracking-tight truncate leading-tight">
@@ -220,11 +459,11 @@
         </div>
         <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-[10px] sm:text-[11px] font-medium">
           <div class="flex items-center gap-1">
-            <div class="w-3 h-3 bg-slate-200 border-2 border-slate-400 rounded-[1px] shadow-2xs"></div>
+            <div class="w-3 h-3 bg-slate-200 border-2 border-slate-400 rounded-[1px]"></div>
             <span class="text-slate-800 font-black">Kosong</span>
           </div>
           <div class="flex items-center gap-1">
-            <div class="w-3 h-3 bg-[#ea580c] rounded-[1px]"></div>
+            <div class="w-3 h-3 bg-[#ea580c] rounded-[1px]" style="background-color: #ea580c !important;"></div>
             <span class="text-slate-700 font-bold">Break</span>
           </div>
           <div class="flex items-center gap-1">
@@ -232,7 +471,7 @@
             <span class="text-slate-700 font-bold">Booked (Online)</span>
           </div>
           <div class="flex items-center gap-1">
-            <div class="w-3 h-3 bg-amber-600 border border-amber-300 rounded-[1px] animate-pulse"></div>
+            <div class="w-3 h-3 bg-amber-600 border border-amber-300 rounded-[1px]"></div>
             <span class="text-amber-700 font-bold">Checked-In (Tiba)</span>
           </div>
           <div class="flex items-center gap-1">
@@ -248,10 +487,10 @@
 
       <!-- Horizontal Scrollable Matrix (Distribusi Merata Tanpa Ruang Hampa) -->
       <div class="overflow-x-auto flex-1 flex flex-col justify-between pb-0.5">
-        <div class="min-w-[740px] lg:min-w-full flex-1 flex flex-col justify-between space-y-0.5 sm:space-y-1">
+        <div class="min-w-[740px] lg:min-w-full flex-1 flex flex-col justify-between" style="display: flex; flex-direction: column; justify-content: space-between;">
 
           <!-- ROW 1: HEADER JAM -->
-          <div id="tvHeaderRow" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 text-center text-[10px] sm:text-xs font-bold text-slate-600">
+          <div id="tvHeaderRow" class="tv-grid-reg-sat text-center text-[10px] sm:text-xs font-bold text-slate-600">
             <div class="text-left font-bold text-slate-400 pl-1">LOKASI STALL</div>
             <div>08.30</div>
             <div>09.30</div>
@@ -259,93 +498,93 @@
             <div>11.30</div>
             <div>12.30</div>
             <div>13.30</div>
-            <div id="tvHeaderCol-1430">14.30</div>
-            <div id="tvHeaderCol-1530">15.30</div>
-            <div id="tvHeaderCol-1630" style="display: none;">16.30</div>
+            <div id="tvHeaderCol-1430" class="hidden">14.30</div>
+            <div id="tvHeaderCol-1530" class="hidden">15.30</div>
+            <div id="tvHeaderCol-1630" class="hidden">16.30</div>
           </div>
 
           <!-- ROW 2: STALL EV 1 (KOTAK KOSONG WARNA TAJAM KONTRAK) -->
-          <div id="tvRowStall1" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 items-center">
+          <div id="tvRowStall1" class="tv-grid-reg-sat items-center">
             <div class="text-left font-bold text-slate-900 pl-1 flex items-center gap-1.5 text-xs select-none">
-              <span class="w-2.5 h-2.5 bg-red-500"></span>
+              <span class="w-2.5 h-2.5 bg-red-600" style="display: inline-block; width: 10px; height: 10px; background-color: #dc2626;"></span>
               Stall EV 1
             </div>
-            <div id="slot-stall1-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
             
             <!-- 12.30 BREAK FOR STALL EV 1 (ORANGE) -->
-            <div id="slot-stall1-1230" class="bg-[#ea580c] stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs">
+            <div id="slot-stall1-1230" class="stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs" style="background-color: #ea580c !important;">
               <span>Break</span>
               <span class="text-[8px] sm:text-[9px] font-normal text-orange-200">12.30 - 13.30</span>
             </div>
 
-            <div id="slot-stall1-1330" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-1430" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-1530" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall1-1630" style="display: none;" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1330" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1430" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1530" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1630" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
           </div>
 
           <!-- ROW 3: STALL EV 2 (KOTAK KOSONG WARNA TAJAM KONTRAK) -->
-          <div id="tvRowStall2" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 items-center">
+          <div id="tvRowStall2" class="tv-grid-reg-sat items-center">
             <div class="text-left font-bold text-slate-900 pl-1 flex items-center gap-1.5 text-xs select-none">
-              <span class="w-2.5 h-2.5 bg-rose-500"></span>
+              <span class="w-2.5 h-2.5 bg-rose-500" style="display: inline-block; width: 10px; height: 10px; background-color: #f43f5e;"></span>
               Stall EV 2
             </div>
-            <div id="slot-stall2-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-1230" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1230" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
 
             <!-- 13.30 BREAK FOR STALL EV 2 (ORANGE) -->
-            <div id="slot-stall2-1330" class="bg-[#ea580c] stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs">
+            <div id="slot-stall2-1330" class="stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs" style="background-color: #ea580c !important;">
               <span>Break</span>
               <span class="text-[8px] sm:text-[9px] font-normal text-orange-200">13.30 - 14.30</span>
             </div>
 
-            <div id="slot-stall2-1430" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-1530" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-            <div id="slot-stall2-1630" style="display: none;" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1430" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1530" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1630" class="hidden stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
           </div>
 
           <!-- DIVIDER -->
-          <div class="pt-0.5 border-t border-slate-200"></div>
+          <div class="pt-0.5 border-t border-slate-200" style="border-top: 1px solid #e2e8f0;"></div>
 
           <!-- ROW 4: EXPRESS BAY (16 SLOTS BIASA / 12 SLOTS SABTU) -->
           <div>
             <div class="flex items-center justify-between mb-0.5 pl-1">
               <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 bg-indigo-600 rounded-[2px]"></span>
+                <span class="w-2.5 h-2.5 bg-indigo-600 rounded-[2px]" style="display: inline-block; width: 10px; height: 10px; background-color: #4f46e5;"></span>
                 <span class="text-xs sm:text-sm font-black text-slate-900 tracking-wide uppercase">Express Bay</span>
-                <span id="tvExpressSubLabel" class="text-[10px] sm:text-xs text-slate-500 font-semibold">(16 slot antrian pengerjaan ringan)</span>
+                <span id="tvExpressSubLabel" class="text-[10px] sm:text-xs text-slate-500 font-semibold">(12 slot antrian pengerjaan ringan)</span>
               </div>
             </div>
 
-            <div id="tvRowExpress" class="grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5 items-center">
+            <div id="tvRowExpress" class="tv-grid-exp-sat items-center">
               <div class="text-[10px] sm:text-[11px] font-bold text-slate-600 pl-1 select-none">Slot:</div>
-              <div id="slot-express-0" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-1" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-2" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-3" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-4" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-5" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-6" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-7" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-8" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-9" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-10" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-11" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-12" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-13" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-14" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-15" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-16" style="display: none;" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
-              <div id="slot-express-17" style="display: none;" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-0" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-1" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-2" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-3" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-4" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-5" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-6" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-7" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-8" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-9" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-10" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-11" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-12" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-13" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-14" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-15" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-16" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-17" class="hidden stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
             </div>
 
-            <div id="tvRowExpressTimes" class="grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5 text-[8px] sm:text-[9px] text-slate-500 text-center mt-0.5 select-none">
+            <div id="tvRowExpressTimes" class="tv-grid-exp-sat text-[8px] sm:text-[9px] text-slate-500 text-center mt-0.5 select-none">
               <div></div>
               <div id="tvExpTime-0">08.30</div>
               <div id="tvExpTime-1">09.00</div>
@@ -359,12 +598,12 @@
               <div id="tvExpTime-9">13.00</div>
               <div id="tvExpTime-10">13.30</div>
               <div id="tvExpTime-11">14.00</div>
-              <div id="tvExpTime-12">14.30</div>
-              <div id="tvExpTime-13">15.00</div>
-              <div id="tvExpTime-14">15.30</div>
-              <div id="tvExpTime-15">16.00</div>
-              <div id="tvExpTime-16" style="display: none;">16.30</div>
-              <div id="tvExpTime-17" style="display: none;">17.00</div>
+              <div id="tvExpTime-12" class="hidden">14.30</div>
+              <div id="tvExpTime-13" class="hidden">15.00</div>
+              <div id="tvExpTime-14" class="hidden">15.30</div>
+              <div id="tvExpTime-15" class="hidden">16.00</div>
+              <div id="tvExpTime-16" class="hidden">16.30</div>
+              <div id="tvExpTime-17" class="hidden">17.00</div>
             </div>
           </div>
 
@@ -378,12 +617,12 @@
       <!-- Jam Operasional -->
       <div class="bg-white border border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shadow-xs rounded-[2px] select-none">
         <div class="flex items-center gap-1.5">
-          <div id="tvOperatingHoursDisplay" class="text-xs sm:text-sm md:text-base font-black text-slate-900 tracking-tight">08.30 – 16.30</div>
+          <div id="tvOperatingHoursDisplay" class="text-xs sm:text-sm md:text-base font-black text-slate-900 tracking-tight">08.30 – 14.30</div>
           <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Jam Servis</span>
         </div>
         <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
-          <i data-lucide="clock" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
-          <span id="tvOperatingDurationDisplay">Total durasi 8 jam operasional</span>
+          <svg class="w-3 h-3 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span id="tvOperatingDurationDisplay">Total durasi 6 jam operasional</span>
         </div>
       </div>
 
@@ -394,7 +633,7 @@
           <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Reguler</span>
         </div>
         <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
-          <i data-lucide="wrench" class="w-3 h-3 text-amber-600 flex-shrink-0"></i>
+          <svg class="w-3 h-3 text-amber-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
           <span id="tvBreakSummaryText">Break 12.30 & 13.30</span>
         </div>
       </div>
@@ -406,8 +645,8 @@
           <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Express Bay</span>
         </div>
         <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
-          <i data-lucide="gauge" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
-          <span id="tvExpressSummaryText">Maks 16 Motor/Hari</span>
+          <svg class="w-3 h-3 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+          <span id="tvExpressSummaryText">Maks 12 Motor/Hari</span>
         </div>
       </div>
 
@@ -416,8 +655,8 @@
   </div>
 
   <!-- TOAST PENGAKTIF SUARA (HANYA MUNCUL JIKA BROWSER MEMBLOKIR AUTOPLAY DINGIN) -->
-  <div id="audioUnlockToast" class="fixed bottom-3 right-3 bg-amber-500 text-slate-950 px-3 py-1.5 rounded-[4px] shadow-2xl flex items-center gap-2 text-xs font-black cursor-pointer transition-all duration-300 z-50 animate-bounce hidden" onclick="forceUnlockAudioFromToast()">
-    <i data-lucide="volume-2" class="w-4 h-4"></i>
+  <div id="audioUnlockToast" class="fixed bottom-3 right-3 bg-amber-500 text-slate-950 px-3 py-1.5 rounded-[4px] shadow-2xl flex items-center gap-2 text-xs font-black cursor-pointer transition-all duration-300 z-50 hidden" onclick="forceUnlockAudioFromToast()" style="position: fixed; bottom: 12px; right: 12px; background-color: #f59e0b; color: #020617; padding: 6px 12px; border-radius: 4px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 9999; cursor: pointer;">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
     <span>Klik di sini atau layar untuk aktifkan suara TV</span>
   </div>
 
@@ -448,7 +687,6 @@
     // AUDIO ENGINE: SELALU ON & AUTO-UNLOCK INSTAN SAAT WEB TERBUKA
     // ==============================================================
     let audioCtx = null;
-    let isAudioPrimed = false;
 
     function getAudioContext() {
       if (!audioCtx) {
@@ -458,7 +696,7 @@
         }
       }
       if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(() => {});
+        audioCtx.resume().catch(function() {});
       }
       return audioCtx;
     }
@@ -472,9 +710,9 @@
         const ctx = getAudioContext();
         if (ctx) {
           if (ctx.state === 'suspended') {
-            ctx.resume().then(() => {
+            ctx.resume().then(function() {
               hideAudioUnlockToast();
-            }).catch(() => {});
+            }).catch(function() {});
           } else if (ctx.state === 'running') {
             hideAudioUnlockToast();
           }
@@ -518,15 +756,15 @@
     }
 
     // Pasang listener interaksi global: sentuhan/klik apapun di TV langsung unlock audio
-    ['click', 'touchstart', 'pointerdown', 'keydown'].forEach(evt => {
-      window.addEventListener(evt, () => {
+    ['click', 'touchstart', 'pointerdown', 'keydown'].forEach(function(evt) {
+      window.addEventListener(evt, function() {
         autoUnlockAudioEngine();
       }, { passive: true });
     });
 
     // Jalankan segera saat file HTML mulai diproses
     autoUnlockAudioEngine();
-    window.addEventListener('load', () => {
+    window.addEventListener('load', function() {
       autoUnlockAudioEngine();
       setTimeout(checkAudioState, 1500);
     });
@@ -534,18 +772,18 @@
     // Airport Chime 4 Nada Elegan (C5, E5, G5, C6)
     function playChime() {
       if (!isSoundEnabled) return Promise.resolve();
-      return new Promise((resolve) => {
+      return new Promise(function(resolve) {
         try {
           const ctx = getAudioContext();
           if (!ctx) return resolve();
           if (ctx.state === 'suspended') {
-            ctx.resume().catch(() => {});
+            ctx.resume().catch(function() {});
           }
 
           const notes = [523.25, 659.25, 783.99, 1046.50];
           const noteDuration = 0.22;
 
-          notes.forEach((freq, idx) => {
+          notes.forEach(function(freq, idx) {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
@@ -597,7 +835,7 @@
 
       if (!isSoundEnabled) return;
 
-      playChime().then(() => {
+      playChime().then(function() {
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(text);
@@ -606,7 +844,7 @@
           utterance.pitch = 1.05;
 
           const voices = window.speechSynthesis.getVoices();
-          const idVoice = voices.find(v => v.lang && (v.lang.includes('id') || v.lang.includes('ID')));
+          const idVoice = voices.find(function(v) { return v.lang && (v.lang.includes('id') || v.lang.includes('ID')); });
           if (idVoice) utterance.voice = idVoice;
 
           window.speechSynthesis.speak(utterance);
@@ -668,28 +906,6 @@
       return false;
     }
 
-    function formatDateIndo(dateStr, includeDay = false) {
-      if (!dateStr) return '';
-      const parts = dateStr.split('-');
-      if (parts.length !== 3) return dateStr;
-      
-      const year = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1;
-      const day = parseInt(parts[2]);
-      const d = new Date(year, month, day);
-
-      const days = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
-      const months = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
-
-      const dayName = days[d.getDay()];
-      const monthName = months[month];
-
-      if (includeDay) {
-        return `${dayName}, ${day} ${monthName} ${year}`;
-      }
-      return `${day} ${monthName} ${year}`;
-    }
-
     function updateLiveClock() {
       const now = new Date();
       const clockEl = document.getElementById('liveClock');
@@ -748,7 +964,7 @@
 
     function isSameSlot(slotA, slotB) {
       if (!slotA || !slotB) return false;
-      const normalize = s => String(s).replace(':', '.').replace(/\s+/g, '').toLowerCase();
+      const normalize = function(s) { return String(s).replace(':', '.').replace(/\s+/g, '').toLowerCase(); };
       const a = normalize(slotA);
       const b = normalize(slotB);
       return a === b || a.startsWith(b) || b.startsWith(a);
@@ -756,7 +972,7 @@
 
     function isSameStall(stallA, stallB) {
       if (!stallA || !stallB) return false;
-      const norm = s => String(s).toLowerCase().replace(/[\s\-_]/g, '');
+      const norm = function(s) { return String(s).toLowerCase().replace(/[\s\-_]/g, ''); };
       return norm(stallA) === norm(stallB);
     }
 
@@ -764,14 +980,9 @@
       const todayIso = getLocalDateIso();
       const isTvDateSat = isSaturday(todayIso);
 
-      // Konfigurasi kolom sesuai hari (Sabtu vs Hari Biasa)
-      const regColsClass = isTvDateSat 
-        ? 'grid grid-cols-[90px_repeat(6,1fr)] sm:grid-cols-[105px_repeat(6,1fr)] gap-1 sm:gap-1.5'
-        : 'grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5';
-
-      const expColsClass = isTvDateSat
-        ? 'grid grid-cols-[90px_repeat(12,1fr)] sm:grid-cols-[105px_repeat(12,1fr)] gap-0.5'
-        : 'grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5';
+      // Konfigurasi kelas grid murni (100% didukung semua Smart TV)
+      const regColsClass = isTvDateSat ? 'tv-grid-reg-sat' : 'tv-grid-reg-norm';
+      const expColsClass = isTvDateSat ? 'tv-grid-exp-sat' : 'tv-grid-exp-norm';
 
       const tvHeaderRow = document.getElementById('tvHeaderRow');
       if (tvHeaderRow) tvHeaderRow.className = `${regColsClass} text-center text-[10px] sm:text-xs font-bold text-slate-600`;
@@ -788,13 +999,24 @@
       const tvRowExpressTimes = document.getElementById('tvRowExpressTimes');
       if (tvRowExpressTimes) tvRowExpressTimes.className = `${expColsClass} text-[8px] sm:text-[9px] text-slate-500 text-center mt-0.5 select-none`;
 
+      function setSlotVisibility(el, visible, isFlex) {
+        if (!el) return;
+        if (visible) {
+          el.classList.remove('hidden');
+          el.style.setProperty('display', isFlex !== false ? 'flex' : 'block', 'important');
+        } else {
+          el.classList.add('hidden');
+          el.style.setProperty('display', 'none', 'important');
+        }
+      }
+
       // Header Jam Kolom 14.30, 15.30, 16.30
       const col1430 = document.getElementById('tvHeaderCol-1430');
       const col1530 = document.getElementById('tvHeaderCol-1530');
       const col1630 = document.getElementById('tvHeaderCol-1630');
-      if (col1430) col1430.style.display = isTvDateSat ? 'none' : 'block';
-      if (col1530) col1530.style.display = isTvDateSat ? 'none' : 'block';
-      if (col1630) col1630.style.display = 'none';
+      setSlotVisibility(col1430, !isTvDateSat, false);
+      setSlotVisibility(col1530, !isTvDateSat, false);
+      setSlotVisibility(col1630, false, false);
 
       // Express bay label & summary
       const tvExpSub = document.getElementById('tvExpressSubLabel');
@@ -808,96 +1030,104 @@
         const timeEl = document.getElementById(`tvExpTime-${i}`);
         if (timeEl) {
           if (isTvDateSat && i >= 12) {
-            timeEl.style.display = 'none';
+            setSlotVisibility(timeEl, false, false);
           } else if (!isTvDateSat && i >= 16) {
-            timeEl.style.display = 'none';
+            setSlotVisibility(timeEl, false, false);
           } else {
-            timeEl.style.display = 'block';
+            setSlotVisibility(timeEl, true, false);
           }
         }
       }
 
-      const bookings = loadBookings().filter(b => b.date === todayIso && (b.siteId === currentSiteId || !b.siteId));
+      const bookings = loadBookings().filter(function(b) {
+        return b.date === todayIso && (b.siteId === currentSiteId || !b.siteId);
+      });
       let filledSlotsCount = 0;
 
       // Render Stall EV 1
-      REGULAR_HOURS.forEach(time => {
+      REGULAR_HOURS.forEach(function(time) {
         const slotEl = document.getElementById(`slot-stall1-${time.replace('.', '')}`);
         if (!slotEl) return;
         if (time === '12.30') return;
 
         if (isTvDateSat && time >= '14.30') {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
         if (!isTvDateSat && time >= '16.30') {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
 
-        slotEl.style.display = 'flex';
+        setSlotVisibility(slotEl, true);
 
-        const booking = bookings.find(b => isSameStall(b.stall, 'stall1') && isSameSlot(b.slot, time) && b.status !== 'Batal');
+        const booking = bookings.find(function(b) {
+          return isSameStall(b.stall, 'stall1') && isSameSlot(b.slot, time) && b.status !== 'Batal';
+        });
         if (booking) {
           filledSlotsCount++;
           slotEl.innerHTML = formatSlotHtml(booking);
           applyDynamicSlotStyle(slotEl, booking.status);
         } else {
           slotEl.innerHTML = `<span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>`;
-          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
         }
       });
 
       // Render Stall EV 2
-      REGULAR_HOURS.forEach(time => {
+      REGULAR_HOURS.forEach(function(time) {
         const slotEl = document.getElementById(`slot-stall2-${time.replace('.', '')}`);
         if (!slotEl) return;
         if (time === '13.30') return;
 
         if (isTvDateSat && time >= '14.30') {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
         if (!isTvDateSat && time >= '16.30') {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
 
-        slotEl.style.display = 'flex';
+        setSlotVisibility(slotEl, true);
 
-        const booking = bookings.find(b => isSameStall(b.stall, 'stall2') && isSameSlot(b.slot, time) && b.status !== 'Batal');
+        const booking = bookings.find(function(b) {
+          return isSameStall(b.stall, 'stall2') && isSameSlot(b.slot, time) && b.status !== 'Batal';
+        });
         if (booking) {
           filledSlotsCount++;
           slotEl.innerHTML = formatSlotHtml(booking);
           applyDynamicSlotStyle(slotEl, booking.status);
         } else {
           slotEl.innerHTML = `<span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>`;
-          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
         }
       });
 
       // Render Express Bay (18 Slots)
-      EXPRESS_SLOTS.forEach((timeRange, index) => {
+      EXPRESS_SLOTS.forEach(function(timeRange, index) {
         const slotEl = document.getElementById(`slot-express-${index}`);
         if (!slotEl) return;
 
         if (isTvDateSat && index >= 12) {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
         if (!isTvDateSat && index >= 16) {
-          slotEl.style.display = 'none';
+          setSlotVisibility(slotEl, false);
           return;
         }
 
-        slotEl.style.display = 'flex';
+        setSlotVisibility(slotEl, true);
 
-        const booking = bookings.find(b => isSameStall(b.stall, 'express') && (String(b.slot) === String(index) || isSameSlot(b.slot, timeRange.split(' - ')[0]) || (typeof b.slot === 'string' && b.slot.includes(timeRange.split(' - ')[0]))) && b.status !== 'Batal');
+        const booking = bookings.find(function(b) {
+          return isSameStall(b.stall, 'express') && (String(b.slot) === String(index) || isSameSlot(b.slot, timeRange.split(' - ')[0]) || (typeof b.slot === 'string' && b.slot.includes(timeRange.split(' - ')[0]))) && b.status !== 'Batal';
+        });
         if (booking) {
           filledSlotsCount++;
           applyDynamicExpressSlotStyle(slotEl, booking);
         } else {
-          slotEl.className = 'stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+          slotEl.className = 'stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
           slotEl.innerHTML = '<span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>';
         }
       });
@@ -924,9 +1154,9 @@
       // Update banner siaran jika ada antrean aktif
       const activeCallBannerText = document.getElementById('activeCallText');
       if (activeCallBannerText) {
-        const inProgress = bookings.find(b => b.status === 'In Progress');
-        const checkedIn = bookings.find(b => b.status === 'Checked In');
-        const firstBooked = bookings.find(b => b.status === 'Booked');
+        const inProgress = bookings.find(function(b) { return b.status === 'In Progress'; });
+        const checkedIn = bookings.find(function(b) { return b.status === 'Checked In'; });
+        const firstBooked = bookings.find(function(b) { return b.status === 'Booked'; });
         const currentActive = inProgress || checkedIn || firstBooked;
 
         if (currentActive) {
@@ -1003,14 +1233,14 @@
       try {
         if ('BroadcastChannel' in window) {
           const bc = new BroadcastChannel('polytron_ev_sync_channel');
-          bc.onmessage = (event) => {
+          bc.onmessage = function(event) {
             handleIncomingSyncMessage(event.data);
           };
         }
       } catch (e) {}
 
       // 2. Storage event
-      window.addEventListener('storage', (e) => {
+      window.addEventListener('storage', function(e) {
         if (e.key === 'POLYTRON_REMOTE_CALL_EVENT') {
           try {
             const data = JSON.parse(e.newValue);
@@ -1043,12 +1273,12 @@
         const topicCall = 'polytron/ev_service/voice_call';
         const topicData = 'polytron/ev_service/data_sync';
 
-        mqttClient.on('connect', () => {
+        mqttClient.on('connect', function() {
           console.log('✅ Monitor TV MQTT Connected to EMQX Broker');
           mqttClient.subscribe([topicCall, topicData]);
         });
 
-        mqttClient.on('message', (topic, message) => {
+        mqttClient.on('message', function(topic, message) {
           try {
             const payload = JSON.parse(message.toString());
             handleIncomingSyncMessage(payload);
@@ -1062,7 +1292,8 @@
       if (payload.deviceId === LOCAL_DEVICE_ID) return;
 
       if (payload.type === 'voice_call') {
-        const { text, booking } = payload;
+        const text = payload.text;
+        const booking = payload.booking;
         if (text) {
           announceVoice(text, booking);
         }
@@ -1104,13 +1335,13 @@
       autoUnlockAudioEngine();
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
         if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(function() {});
         } else if (document.documentElement.webkitRequestFullscreen) {
           document.documentElement.webkitRequestFullscreen();
         }
       } else {
         if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(function() {});
         } else if (document.webkitExitFullscreen) {
           document.webkitExitFullscreen();
         }
@@ -1122,11 +1353,7 @@
 
     function updateFullscreenState() {
       const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      const fsIcon = document.getElementById('fsIcon');
       const fsBtn = document.getElementById('btnFullscreenToggle');
-      if (fsIcon) {
-        fsIcon.setAttribute('data-lucide', isFs ? 'minimize' : 'maximize');
-      }
       if (fsBtn) {
         const span = fsBtn.querySelector('span');
         if (span) span.innerText = isFs ? 'Keluar Full' : 'Layar Penuh';
@@ -1137,7 +1364,7 @@
     // ==============================================================
     // INISIALISASI SAAT HALAMAN DIMUAT
     // ==============================================================
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', function() {
       autoUnlockAudioEngine();
       updateLiveClock();
       setInterval(updateLiveClock, 1000);
