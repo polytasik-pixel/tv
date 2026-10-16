@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POLYTRON EV SERVICE - MONITOR TV RUANG TUNGGU</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- MQTT.js CDN untuk Realtime Sync Antar Perangkat (HP ke Layar TV) -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    /* ============================================================== */
+    /* 1. RESET LAYAR PENUH 100VH & KUNCI SCROLL PADA TV MONITOR      */
+    /* ============================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      height: 100vh !important;
+      max-height: 100vh !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      overflow: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background-color: #380202 !important;
+      background: radial-gradient(circle at top right, #6b0c0c 0%, #380202 55%, #180101 100%) !important;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Container Utama Monitor TV: Pas Penuh 1 Layar, Jarak 1.5mm */
+    #tvContainer {
+      height: 100vh !important;
+      max-height: 100vh !important;
+      overflow: hidden !important;
+      padding: 1.5mm !important;
+      gap: 1.5mm !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+    }
+
+    #tvContainer > * {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    /* RESPONSIVE DYNAMIC SLOT HEIGHTS - MENGISI LAYAR PENUH & RAPI */
+    .stall-slot {
+      transition: all 0.2s ease-in-out;
+    }
+
+    .stall-slot-reg {
+      height: clamp(56px, 11vh, 110px) !important;
+      min-height: 56px !important;
+    }
+
+    .stall-slot-exp {
+      height: clamp(40px, 8vh, 75px) !important;
+      min-height: 40px !important;
+    }
+
+    /* Ticker Text Berjalan Otomatis Halus */
+    .tv-ticker-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .tv-ticker-track {
+      display: inline-block;
+      white-space: nowrap;
+      animation: tickerAnimation 40s linear infinite;
+    }
+
+    @keyframes tickerAnimation {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* Animasi Denyut Unit Checked-In / Tiba */
+    .stall-checked-in {
+      animation: pulse-checked 1.5s infinite;
+    }
+
+    @keyframes pulse-checked {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+      50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    }
+
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="select-none">
+
+  <!-- ============================================================== -->
+  <!-- CONTAINER UTAMA TV MONITOR (FULL LAYAR 100VH)                  -->
+  <!-- ============================================================== -->
+  <div id="tvContainer">
+
+    <!-- 1. TOP HEADER PANEL (LOGO, CABANG, JAM, TANGGAL & STATUS SLOT) -->
+    <div class="bg-white border-b border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs space-y-0.5 rounded-[2px] flex-shrink-0">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-1.5">
+        
+        <!-- Logo & Nama Bengkel Service Center -->
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="w-3 h-3 bg-red-600 rounded-[2px]"></span>
+            <h1 class="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-wider uppercase">POLYTRON EV SERVICE</h1>
+            
+            <!-- Link ke Aplikasi Lengkap (SA / Teknisi / Konsumen) -->
+            <a href="index_full_app.html" class="ml-2 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1 shadow-xs transition rounded-[2px]" title="Buka Aplikasi Lengkap (SA / Teknisi / Konsumen)">
+              <i data-lucide="layout-grid" class="w-3 h-3 text-red-600"></i>
+              <span>App Lengkap</span>
+            </a>
+
+            <!-- Tombol Layar Penuh (Fullscreen Toggle) -->
+            <button onclick="toggleFullScreen()" id="btnFullscreenToggle" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs transition rounded-[2px]" title="Mode Layar Penuh">
+              <i id="fsIcon" data-lucide="maximize" class="w-3 h-3 text-white"></i>
+              <span>Layar Penuh</span>
+            </button>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-2 mt-0.5">
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold rounded-[2px]">
+              <i data-lucide="map-pin" class="w-2.5 h-2.5"></i>
+              <span id="bannerSiteName">Polytron SC Tasikmalaya</span>
+            </span>
+            <span id="bannerSiteAddress" class="text-[11px] text-slate-500 truncate max-w-md">Jl. KHZ. Mustofa No. 280, Tasikmalaya</span>
+          </div>
+        </div>
+
+        <!-- Kontrol Live: Tanggal Hari Ini, Jam Bengkel, & Slot Terisi -->
+        <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-50 border border-slate-200 p-0.5 sm:p-1 self-start md:self-auto flex-wrap sm:flex-nowrap shadow-xs rounded-[3px]">
+          
+          <!-- Tanggal Hari Ini (Nama Hari Huruf Kapital) -->
+          <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
+            <i data-lucide="calendar" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+            <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
+              <span id="tvDayNameDisplay" class="text-red-600 uppercase tracking-wider">HARI, </span>
+              <span id="tvFullDateDisplay" class="text-slate-900 uppercase tracking-tight">TANGGAL</span>
+            </div>
+          </div>
+
+          <!-- Jam Live Waktu Bengkel (Format Sama dengan Tanggal) -->
+          <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
+            <i data-lucide="clock" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+            <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
+              <span class="text-slate-500 uppercase tracking-wider font-semibold text-[10px] sm:text-xs mr-0.5">WAKTU:</span>
+              <span id="liveClock" class="font-mono font-bold text-red-600">08:30:00 WIB</span>
+            </div>
+          </div>
+
+          <!-- Slot Terisi (Format Sama dengan Tanggal) -->
+          <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-2 py-0.5 sm:py-1 rounded-[2px] shadow-xs select-none">
+            <i data-lucide="layers" class="w-3 h-3 text-slate-600 flex-shrink-0"></i>
+            <div class="leading-tight text-xs sm:text-sm font-black whitespace-nowrap">
+              <span class="text-slate-500 uppercase tracking-wider font-semibold text-[10px] sm:text-xs mr-0.5">SLOT:</span>
+              <span id="slotUsageDisplay" class="font-bold text-slate-900">0 / 22</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 2. BANNER RUNNING TEXT INFORMASI (TICKER BERJALAN HALUS) -->
+    <div class="bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#dc2626] border-y border-red-500/30 px-2.5 sm:px-3 py-0.5 shadow-xs flex items-center gap-2 overflow-hidden flex-shrink-0">
+      <div class="flex items-center gap-1.5 bg-black/40 text-amber-300 px-1.5 py-0.2 rounded-[2px] text-[9px] font-black tracking-wider uppercase whitespace-nowrap shrink-0 border border-amber-400/30 shadow-inner">
+        <i data-lucide="info" class="w-2.5 h-2.5 text-amber-400 animate-pulse"></i>
+        <span>INFORMASI</span>
+      </div>
+      <div class="tv-ticker-wrapper flex-1 overflow-hidden">
+        <div id="tvTickerTrack" class="tv-ticker-track text-[10px] sm:text-[11px] font-bold text-white tracking-wide select-none">
+          <span class="inline-block pr-12">Selamat Datang di Polytron Service Center &bull; Konsumen diharapkan melapor ke Service Advisor (SA) saat tiba untuk proses check-in antrian &bull; Pantau status pengerjaan unit Anda secara realtime pada layar ini.</span>
+          <span class="inline-block pr-12">Selamat Datang di Polytron Service Center &bull; Konsumen diharapkan melapor ke Service Advisor (SA) saat tiba untuk proses check-in antrian &bull; Pantau status pengerjaan unit Anda secara realtime pada layar ini.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. BANNER SIARAN PANGGILAN AKTIF (NOW CALLING BROADCAST) -->
+    <div id="activeCallBanner" class="bg-red-50 border border-red-500 px-2.5 sm:px-3 py-1 sm:py-1.5 shadow-xs flex items-center gap-2 sm:gap-2.5 transition rounded-[2px] flex-shrink-0">
+      <div class="w-7 h-7 sm:w-8 sm:h-8 bg-red-600 flex items-center justify-center text-white font-black animate-pulse flex-shrink-0 rounded-[2px]">
+        <i data-lucide="bell" class="w-4 h-4 sm:w-4.5 sm:h-4.5"></i>
+      </div>
+      <div class="flex-1 overflow-hidden">
+        <div id="activeCallText" class="text-sm sm:text-base md:text-lg lg:text-xl font-black text-red-900 uppercase tracking-tight truncate leading-tight">
+          SELAMAT DATANG DI POLYTRON SERVICE CENTER &bull; SILAKAN LAPOR KE SA UNTUK CHECK-IN ANTREAN
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. TIMELINE GRID SIMULASI (HORIZONTAL MATRIX - TINGGI PAS SATU LAYAR PENUH) -->
+    <div class="bg-white border border-slate-200 px-2 sm:px-2.5 py-1 sm:py-1.5 shadow-xs overflow-hidden rounded-[2px] flex-1 flex flex-col">
+      
+      <!-- Legend Bar (REGULER dengan Kotak Kuning Seukuran Express) -->
+      <div class="flex flex-wrap items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-200 text-xs flex-shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 bg-yellow-400 rounded-[2px]"></span>
+          <span class="text-xs sm:text-sm font-black text-slate-900 tracking-wide uppercase">Reguler</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-[10px] sm:text-[11px] font-medium">
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-slate-200 border-2 border-slate-400 rounded-[1px] shadow-2xs"></div>
+            <span class="text-slate-800 font-black">Kosong</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-[#ea580c] rounded-[1px]"></div>
+            <span class="text-slate-700 font-bold">Break</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-indigo-900 border border-indigo-500 rounded-[1px]"></div>
+            <span class="text-slate-700 font-bold">Booked (Online)</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-amber-600 border border-amber-300 rounded-[1px] animate-pulse"></div>
+            <span class="text-amber-700 font-bold">Checked-In (Tiba)</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-cyan-800 border border-cyan-400 rounded-[1px]"></div>
+            <span class="text-cyan-700 font-bold">Dikerjakan</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 bg-emerald-800 border border-emerald-400 rounded-[1px]"></div>
+            <span class="text-emerald-700 font-bold">Selesai</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Horizontal Scrollable Matrix (Distribusi Merata Tanpa Ruang Hampa) -->
+      <div class="overflow-x-auto flex-1 flex flex-col justify-between pb-0.5">
+        <div class="min-w-[740px] lg:min-w-full flex-1 flex flex-col justify-between space-y-0.5 sm:space-y-1">
+
+          <!-- ROW 1: HEADER JAM -->
+          <div id="tvHeaderRow" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 text-center text-[10px] sm:text-xs font-bold text-slate-600">
+            <div class="text-left font-bold text-slate-400 pl-1">LOKASI STALL</div>
+            <div>08.30</div>
+            <div>09.30</div>
+            <div>10.30</div>
+            <div>11.30</div>
+            <div>12.30</div>
+            <div>13.30</div>
+            <div id="tvHeaderCol-1430">14.30</div>
+            <div id="tvHeaderCol-1530">15.30</div>
+            <div id="tvHeaderCol-1630" style="display: none;">16.30</div>
+          </div>
+
+          <!-- ROW 2: STALL EV 1 (KOTAK KOSONG WARNA TAJAM KONTRAK) -->
+          <div id="tvRowStall1" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 items-center">
+            <div class="text-left font-bold text-slate-900 pl-1 flex items-center gap-1.5 text-xs select-none">
+              <span class="w-2.5 h-2.5 bg-red-500"></span>
+              Stall EV 1
+            </div>
+            <div id="slot-stall1-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            
+            <!-- 12.30 BREAK FOR STALL EV 1 (ORANGE) -->
+            <div id="slot-stall1-1230" class="bg-[#ea580c] stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs">
+              <span>Break</span>
+              <span class="text-[8px] sm:text-[9px] font-normal text-orange-200">12.30 - 13.30</span>
+            </div>
+
+            <div id="slot-stall1-1330" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1430" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1530" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall1-1630" style="display: none;" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+          </div>
+
+          <!-- ROW 3: STALL EV 2 (KOTAK KOSONG WARNA TAJAM KONTRAK) -->
+          <div id="tvRowStall2" class="grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5 items-center">
+            <div class="text-left font-bold text-slate-900 pl-1 flex items-center gap-1.5 text-xs select-none">
+              <span class="w-2.5 h-2.5 bg-rose-500"></span>
+              Stall EV 2
+            </div>
+            <div id="slot-stall2-0830" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-0930" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1030" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1130" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1230" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+
+            <!-- 13.30 BREAK FOR STALL EV 2 (ORANGE) -->
+            <div id="slot-stall2-1330" class="bg-[#ea580c] stall-slot-reg p-0.5 flex flex-col justify-center items-center text-center font-bold text-white text-[11px] sm:text-xs cursor-default select-none pointer-events-none rounded-[2px] shadow-xs">
+              <span>Break</span>
+              <span class="text-[8px] sm:text-[9px] font-normal text-orange-200">13.30 - 14.30</span>
+            </div>
+
+            <div id="slot-stall2-1430" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1530" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            <div id="slot-stall2-1630" style="display: none;" class="stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+          </div>
+
+          <!-- DIVIDER -->
+          <div class="pt-0.5 border-t border-slate-200"></div>
+
+          <!-- ROW 4: EXPRESS BAY (16 SLOTS BIASA / 12 SLOTS SABTU) -->
+          <div>
+            <div class="flex items-center justify-between mb-0.5 pl-1">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-indigo-600 rounded-[2px]"></span>
+                <span class="text-xs sm:text-sm font-black text-slate-900 tracking-wide uppercase">Express Bay</span>
+                <span id="tvExpressSubLabel" class="text-[10px] sm:text-xs text-slate-500 font-semibold">(16 slot antrian pengerjaan ringan)</span>
+              </div>
+            </div>
+
+            <div id="tvRowExpress" class="grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5 items-center">
+              <div class="text-[10px] sm:text-[11px] font-bold text-slate-600 pl-1 select-none">Slot:</div>
+              <div id="slot-express-0" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-1" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-2" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-3" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-4" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-5" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-6" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-7" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-8" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-9" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-10" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-11" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-12" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-13" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-14" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-15" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-16" style="display: none;" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+              <div id="slot-express-17" style="display: none;" class="stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800"><span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span></div>
+            </div>
+
+            <div id="tvRowExpressTimes" class="grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5 text-[8px] sm:text-[9px] text-slate-500 text-center mt-0.5 select-none">
+              <div></div>
+              <div id="tvExpTime-0">08.30</div>
+              <div id="tvExpTime-1">09.00</div>
+              <div id="tvExpTime-2">09.30</div>
+              <div id="tvExpTime-3">10.00</div>
+              <div id="tvExpTime-4">10.30</div>
+              <div id="tvExpTime-5">11.00</div>
+              <div id="tvExpTime-6">11.30</div>
+              <div id="tvExpTime-7">12.00</div>
+              <div id="tvExpTime-8">12.30</div>
+              <div id="tvExpTime-9">13.00</div>
+              <div id="tvExpTime-10">13.30</div>
+              <div id="tvExpTime-11">14.00</div>
+              <div id="tvExpTime-12">14.30</div>
+              <div id="tvExpTime-13">15.00</div>
+              <div id="tvExpTime-14">15.30</div>
+              <div id="tvExpTime-15">16.00</div>
+              <div id="tvExpTime-16" style="display: none;">16.30</div>
+              <div id="tvExpTime-17" style="display: none;">17.00</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 3 SUMMARY CARDS (FULL LAYAR SEIMBANG DENGAN EXPRESS BAY) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-1 sm:gap-1.5 py-0 px-1 sm:px-0 flex-shrink-0">
+      
+      <!-- Jam Operasional -->
+      <div class="bg-white border border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shadow-xs rounded-[2px] select-none">
+        <div class="flex items-center gap-1.5">
+          <div id="tvOperatingHoursDisplay" class="text-xs sm:text-sm md:text-base font-black text-slate-900 tracking-tight">08.30 – 16.30</div>
+          <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Jam Servis</span>
+        </div>
+        <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
+          <i data-lucide="clock" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+          <span id="tvOperatingDurationDisplay">Total durasi 8 jam operasional</span>
+        </div>
+      </div>
+
+      <!-- Ringkasan Stall Reguler -->
+      <div class="bg-white border border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shadow-xs rounded-[2px] select-none">
+        <div class="flex items-center gap-1.5">
+          <div class="text-xs sm:text-sm md:text-base font-black text-slate-900 tracking-tight">2 Stall</div>
+          <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Reguler</span>
+        </div>
+        <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
+          <i data-lucide="wrench" class="w-3 h-3 text-amber-600 flex-shrink-0"></i>
+          <span id="tvBreakSummaryText">Break 12.30 & 13.30</span>
+        </div>
+      </div>
+
+      <!-- Ringkasan Express Bay -->
+      <div class="bg-white border border-slate-200 px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shadow-xs rounded-[2px] select-none">
+        <div class="flex items-center gap-1.5">
+          <div class="text-xs sm:text-sm md:text-base font-black text-slate-900 tracking-tight">1 Stall</div>
+          <span class="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase">Express Bay</span>
+        </div>
+        <div class="flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-600 font-semibold">
+          <i data-lucide="gauge" class="w-3 h-3 text-red-600 flex-shrink-0"></i>
+          <span id="tvExpressSummaryText">Maks 16 Motor/Hari</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- TOAST PENGAKTIF SUARA (HANYA MUNCUL JIKA BROWSER MEMBLOKIR AUTOPLAY DINGIN) -->
+  <div id="audioUnlockToast" class="fixed bottom-3 right-3 bg-amber-500 text-slate-950 px-3 py-1.5 rounded-[4px] shadow-2xl flex items-center gap-2 text-xs font-black cursor-pointer transition-all duration-300 z-50 animate-bounce hidden" onclick="forceUnlockAudioFromToast()">
+    <i data-lucide="volume-2" class="w-4 h-4"></i>
+    <span>Klik di sini atau layar untuk aktifkan suara TV</span>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- JAVASCRIPT LOGIC DEDIKASI KHUSUS LAYAR MONITOR TV              -->
+  <!-- ============================================================== -->
+  <script>
+    // ==============================================================
+    // KONFIGURASI & KONSTANTA UTAMA
+    // ==============================================================
+    const STORAGE_KEY = 'POLYTRON_EV_BOOKINGS';
+    const SOUND_KEY = 'POLYTRON_SOUND_ENABLED';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwkCZc3iMXLQ1957geQ-Ob4EV-wlbc5NNllPLnOInTh7wWNr8G9U4Kk-IhxSzNem4pr/exec';
+    const currentSiteId = 'tasikmalaya';
+    let isSoundEnabled = true;
+
+    const REGULAR_HOURS = ['08.30', '09.30', '10.30', '11.30', '12.30', '13.30', '14.30', '15.30', '16.30'];
+
+    const EXPRESS_SLOTS = [
+      '08.30 - 09.00', '09.00 - 09.30', '09.30 - 10.00', '10.00 - 10.30',
+      '10.30 - 11.00', '11.00 - 11.30', '11.30 - 12.00', '12.00 - 12.30',
+      '12.30 - 13.00', '13.00 - 13.30', '13.30 - 14.00', '14.00 - 14.30',
+      '14.30 - 15.00', '15.00 - 15.30', '15.30 - 16.00', '16.00 - 16.30',
+      '16.30 - 17.00', '17.00 - 17.30'
+    ];
+
+    // ==============================================================
+    // AUDIO ENGINE: SELALU ON & AUTO-UNLOCK INSTAN SAAT WEB TERBUKA
+    // ==============================================================
+    let audioCtx = null;
+    let isAudioPrimed = false;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtxClass) {
+          audioCtx = new AudioCtxClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    // Fungsi pembuka izin audio tanpa perlu tombol UI
+    function autoUnlockAudioEngine() {
+      isSoundEnabled = true;
+      try { localStorage.setItem(SOUND_KEY, 'true'); } catch (e) {}
+
+      try {
+        const ctx = getAudioContext();
+        if (ctx) {
+          if (ctx.state === 'suspended') {
+            ctx.resume().then(() => {
+              hideAudioUnlockToast();
+            }).catch(() => {});
+          } else if (ctx.state === 'running') {
+            hideAudioUnlockToast();
+          }
+        }
+      } catch (e) {}
+
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.getVoices();
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        } catch (e) {}
+      }
+    }
+
+    function checkAudioState() {
+      try {
+        const ctx = getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+          showAudioUnlockToast();
+        } else {
+          hideAudioUnlockToast();
+        }
+      } catch(e) {}
+    }
+
+    function showAudioUnlockToast() {
+      const toast = document.getElementById('audioUnlockToast');
+      if (toast) toast.classList.remove('hidden');
+    }
+
+    function hideAudioUnlockToast() {
+      const toast = document.getElementById('audioUnlockToast');
+      if (toast) toast.classList.add('hidden');
+    }
+
+    function forceUnlockAudioFromToast() {
+      autoUnlockAudioEngine();
+      playChime();
+    }
+
+    // Pasang listener interaksi global: sentuhan/klik apapun di TV langsung unlock audio
+    ['click', 'touchstart', 'pointerdown', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        autoUnlockAudioEngine();
+      }, { passive: true });
+    });
+
+    // Jalankan segera saat file HTML mulai diproses
+    autoUnlockAudioEngine();
+    window.addEventListener('load', () => {
+      autoUnlockAudioEngine();
+      setTimeout(checkAudioState, 1500);
+    });
+
+    // Airport Chime 4 Nada Elegan (C5, E5, G5, C6)
+    function playChime() {
+      if (!isSoundEnabled) return Promise.resolve();
+      return new Promise((resolve) => {
+        try {
+          const ctx = getAudioContext();
+          if (!ctx) return resolve();
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          const noteDuration = 0.22;
+
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * noteDuration);
+
+            gain.gain.setValueAtTime(0, ctx.currentTime + idx * noteDuration);
+            gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + idx * noteDuration + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (idx + 1) * noteDuration + 0.3);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(ctx.currentTime + idx * noteDuration);
+            osc.stop(ctx.currentTime + (idx + 1) * noteDuration + 0.35);
+          });
+
+          setTimeout(resolve, (notes.length * noteDuration + 0.25) * 1000);
+        } catch (e) {
+          resolve();
+        }
+      });
+    }
+
+    // Suara Panggilan Text-to-Speech (Bahasa Indonesia)
+    function announceVoice(text, booking) {
+      autoUnlockAudioEngine();
+
+      // Bersihkan teks panggilan
+      text = text.replace(/^(panggilan\s+(selesai|kedatangan|datang)|perhatian|pendaftaran\s+walk\s*in\s*berhasil)[\.\:\,\-]?\s*/gi, '').trim();
+      text = text
+        .replace(/motor\s+polytron\s+[a-z0-9\-]+/gi, '')
+        .replace(/polytron\s+[a-z0-9\-]+/gi, '')
+        .replace(/motor\s+polytron/gi, '')
+        .replace(/polytron/gi, '')
+        .replace(/\bmotor\s+(fox-r|fox-s|fox-500|t-rex|evo)\b/gi, '')
+        .replace(/\b(fox-r|fox-s|fox-500|t-rex|evo)\b/gi, '')
+        .replace(/,\s*,/g, ',')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+      // Update teks banner siaran aktif
+      if (booking) {
+        updateTvActiveCall(booking);
+      } else {
+        const bannerText = document.getElementById('activeCallText');
+        if (bannerText) bannerText.innerText = text.toUpperCase();
+      }
+
+      if (!isSoundEnabled) return;
+
+      playChime().then(() => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'id-ID';
+          utterance.rate = 0.95;
+          utterance.pitch = 1.05;
+
+          const voices = window.speechSynthesis.getVoices();
+          const idVoice = voices.find(v => v.lang && (v.lang.includes('id') || v.lang.includes('ID')));
+          if (idVoice) utterance.voice = idVoice;
+
+          window.speechSynthesis.speak(utterance);
+        }
+      });
+    }
+
+    function updateTvActiveCall(bookingOrQueue, name, plate, stall) {
+      const bannerText = document.getElementById('activeCallText');
+      if (!bannerText) return;
+      
+      let q = '', n = '', p = '', s = '';
+      if (typeof bookingOrQueue === 'object' && bookingOrQueue !== null) {
+        q = bookingOrQueue.queueNumber || '';
+        n = bookingOrQueue.name || bookingOrQueue.ownerName || '';
+        p = bookingOrQueue.plate || '';
+        s = bookingOrQueue.stall || '';
+      } else {
+        q = bookingOrQueue || '';
+        n = name || '';
+        p = plate || '';
+        s = stall || '';
+      }
+
+      let stallClean = String(s).trim();
+      if (/stall.*1/i.test(stallClean)) stallClean = 'STALL 1';
+      else if (/stall.*2/i.test(stallClean)) stallClean = 'STALL 2';
+      else if (/express/i.test(stallClean)) stallClean = 'EXPRESS BAY';
+
+      const parts = [];
+      if (q) parts.push(q);
+      if (n) parts.push(n);
+      if (p) parts.push(p);
+      if (stallClean) parts.push(stallClean);
+
+      if (parts.length > 0) {
+        bannerText.innerText = parts.join(' • ').toUpperCase();
+      }
+    }
+
+    // ==============================================================
+    // DATE & TIME HELPERS
+    // ==============================================================
+    function getLocalDateIso() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function isSaturday(dateStr) {
+      if (!dateStr) return false;
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return d.getDay() === 6;
+      }
+      return false;
+    }
+
+    function formatDateIndo(dateStr, includeDay = false) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      const day = parseInt(parts[2]);
+      const d = new Date(year, month, day);
+
+      const days = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+      const months = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+
+      const dayName = days[d.getDay()];
+      const monthName = months[month];
+
+      if (includeDay) {
+        return `${dayName}, ${day} ${monthName} ${year}`;
+      }
+      return `${day} ${monthName} ${year}`;
+    }
+
+    function updateLiveClock() {
+      const now = new Date();
+      const clockEl = document.getElementById('liveClock');
+      if (clockEl) {
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        clockEl.innerText = `${hours}:${minutes}:${seconds} WIB`;
+      }
+
+      const todayIso = getLocalDateIso();
+      const tvDayEl = document.getElementById('tvDayNameDisplay');
+      const tvDateEl = document.getElementById('tvFullDateDisplay');
+      
+      const parts = todayIso.split('-');
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const days = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+      const months = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+
+      const dayName = days[d.getDay()];
+      const fullDate = `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1]} ${parts[0]}`;
+
+      if (tvDayEl && tvDayEl.innerText !== `${dayName}, `) {
+        tvDayEl.innerText = `${dayName}, `;
+      }
+      if (tvDateEl && tvDateEl.innerText !== fullDate) {
+        tvDateEl.innerText = fullDate;
+      }
+    }
+
+    // ==============================================================
+    // DATABASE & REALTIME GRID MATRIX RENDERER
+    // ==============================================================
+    function loadBookings() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (!data) {
+        const initial = getInitialSampleBookings();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+        return initial;
+      }
+      try {
+        return JSON.parse(data);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function getInitialSampleBookings() {
+      const today = getLocalDateIso();
+      return [
+        { id: 'BKG-001', queueNumber: 'REG-01', name: 'Ahmad Fauzi', phone: '081234567890', plate: 'Z 1482 ABZ', model: 'Polytron Fox-R', serviceType: 'reguler', complaint: 'Servis Berkala 5.000 KM', stall: 'stall1', slot: '08.30', status: 'In Progress', date: today, siteId: 'tasikmalaya' },
+        { id: 'BKG-002', queueNumber: 'EXP-01', name: 'Budi Santoso', phone: '082198765432', plate: 'Z 5541 TG', model: 'Polytron Fox-S', serviceType: 'express', complaint: 'Cek Tekanan Angin Ban', stall: 'express', slot: '0', status: 'Checked In', date: today, siteId: 'tasikmalaya' },
+        { id: 'BKG-003', queueNumber: 'REG-02', name: 'Citra Lestari', phone: '085712349988', plate: 'Z 3890 KA', model: 'Polytron T-Rex', serviceType: 'reguler', complaint: 'Ganti Kampas Rem Depan', stall: 'stall2', slot: '09.30', status: 'Booked', date: today, siteId: 'tasikmalaya' }
+      ];
+    }
+
+    function isSameSlot(slotA, slotB) {
+      if (!slotA || !slotB) return false;
+      const normalize = s => String(s).replace(':', '.').replace(/\s+/g, '').toLowerCase();
+      const a = normalize(slotA);
+      const b = normalize(slotB);
+      return a === b || a.startsWith(b) || b.startsWith(a);
+    }
+
+    function isSameStall(stallA, stallB) {
+      if (!stallA || !stallB) return false;
+      const norm = s => String(s).toLowerCase().replace(/[\s\-_]/g, '');
+      return norm(stallA) === norm(stallB);
+    }
+
+    function renderSimulasiGrid() {
+      const todayIso = getLocalDateIso();
+      const isTvDateSat = isSaturday(todayIso);
+
+      // Konfigurasi kolom sesuai hari (Sabtu vs Hari Biasa)
+      const regColsClass = isTvDateSat 
+        ? 'grid grid-cols-[90px_repeat(6,1fr)] sm:grid-cols-[105px_repeat(6,1fr)] gap-1 sm:gap-1.5'
+        : 'grid grid-cols-[90px_repeat(8,1fr)] sm:grid-cols-[105px_repeat(8,1fr)] gap-1 sm:gap-1.5';
+
+      const expColsClass = isTvDateSat
+        ? 'grid grid-cols-[90px_repeat(12,1fr)] sm:grid-cols-[105px_repeat(12,1fr)] gap-0.5'
+        : 'grid grid-cols-[90px_repeat(16,1fr)] sm:grid-cols-[105px_repeat(16,1fr)] gap-0.5';
+
+      const tvHeaderRow = document.getElementById('tvHeaderRow');
+      if (tvHeaderRow) tvHeaderRow.className = `${regColsClass} text-center text-[10px] sm:text-xs font-bold text-slate-600`;
+
+      const tvRowStall1 = document.getElementById('tvRowStall1');
+      if (tvRowStall1) tvRowStall1.className = `${regColsClass} items-center`;
+
+      const tvRowStall2 = document.getElementById('tvRowStall2');
+      if (tvRowStall2) tvRowStall2.className = `${regColsClass} items-center`;
+
+      const tvRowExpress = document.getElementById('tvRowExpress');
+      if (tvRowExpress) tvRowExpress.className = `${expColsClass} items-center`;
+
+      const tvRowExpressTimes = document.getElementById('tvRowExpressTimes');
+      if (tvRowExpressTimes) tvRowExpressTimes.className = `${expColsClass} text-[8px] sm:text-[9px] text-slate-500 text-center mt-0.5 select-none`;
+
+      // Header Jam Kolom 14.30, 15.30, 16.30
+      const col1430 = document.getElementById('tvHeaderCol-1430');
+      const col1530 = document.getElementById('tvHeaderCol-1530');
+      const col1630 = document.getElementById('tvHeaderCol-1630');
+      if (col1430) col1430.style.display = isTvDateSat ? 'none' : 'block';
+      if (col1530) col1530.style.display = isTvDateSat ? 'none' : 'block';
+      if (col1630) col1630.style.display = 'none';
+
+      // Express bay label & summary
+      const tvExpSub = document.getElementById('tvExpressSubLabel');
+      if (tvExpSub) tvExpSub.innerText = isTvDateSat ? '(12 slot antrian pengerjaan ringan)' : '(16 slot antrian pengerjaan ringan)';
+
+      const tvExpSummary = document.getElementById('tvExpressSummaryText');
+      if (tvExpSummary) tvExpSummary.innerText = isTvDateSat ? 'Maks 12 Motor/Hari' : 'Maks 16 Motor/Hari';
+
+      // Express time labels 0..17
+      for (let i = 0; i < 18; i++) {
+        const timeEl = document.getElementById(`tvExpTime-${i}`);
+        if (timeEl) {
+          if (isTvDateSat && i >= 12) {
+            timeEl.style.display = 'none';
+          } else if (!isTvDateSat && i >= 16) {
+            timeEl.style.display = 'none';
+          } else {
+            timeEl.style.display = 'block';
+          }
+        }
+      }
+
+      const bookings = loadBookings().filter(b => b.date === todayIso && (b.siteId === currentSiteId || !b.siteId));
+      let filledSlotsCount = 0;
+
+      // Render Stall EV 1
+      REGULAR_HOURS.forEach(time => {
+        const slotEl = document.getElementById(`slot-stall1-${time.replace('.', '')}`);
+        if (!slotEl) return;
+        if (time === '12.30') return;
+
+        if (isTvDateSat && time >= '14.30') {
+          slotEl.style.display = 'none';
+          return;
+        }
+        if (!isTvDateSat && time >= '16.30') {
+          slotEl.style.display = 'none';
+          return;
+        }
+
+        slotEl.style.display = 'flex';
+
+        const booking = bookings.find(b => isSameStall(b.stall, 'stall1') && isSameSlot(b.slot, time) && b.status !== 'Batal');
+        if (booking) {
+          filledSlotsCount++;
+          slotEl.innerHTML = formatSlotHtml(booking);
+          applyDynamicSlotStyle(slotEl, booking.status);
+        } else {
+          slotEl.innerHTML = `<span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>`;
+          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+        }
+      });
+
+      // Render Stall EV 2
+      REGULAR_HOURS.forEach(time => {
+        const slotEl = document.getElementById(`slot-stall2-${time.replace('.', '')}`);
+        if (!slotEl) return;
+        if (time === '13.30') return;
+
+        if (isTvDateSat && time >= '14.30') {
+          slotEl.style.display = 'none';
+          return;
+        }
+        if (!isTvDateSat && time >= '16.30') {
+          slotEl.style.display = 'none';
+          return;
+        }
+
+        slotEl.style.display = 'flex';
+
+        const booking = bookings.find(b => isSameStall(b.stall, 'stall2') && isSameSlot(b.slot, time) && b.status !== 'Batal');
+        if (booking) {
+          filledSlotsCount++;
+          slotEl.innerHTML = formatSlotHtml(booking);
+          applyDynamicSlotStyle(slotEl, booking.status);
+        } else {
+          slotEl.innerHTML = `<span class="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>`;
+          slotEl.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+        }
+      });
+
+      // Render Express Bay (18 Slots)
+      EXPRESS_SLOTS.forEach((timeRange, index) => {
+        const slotEl = document.getElementById(`slot-express-${index}`);
+        if (!slotEl) return;
+
+        if (isTvDateSat && index >= 12) {
+          slotEl.style.display = 'none';
+          return;
+        }
+        if (!isTvDateSat && index >= 16) {
+          slotEl.style.display = 'none';
+          return;
+        }
+
+        slotEl.style.display = 'flex';
+
+        const booking = bookings.find(b => isSameStall(b.stall, 'express') && (String(b.slot) === String(index) || isSameSlot(b.slot, timeRange.split(' - ')[0]) || (typeof b.slot === 'string' && b.slot.includes(timeRange.split(' - ')[0]))) && b.status !== 'Batal');
+        if (booking) {
+          filledSlotsCount++;
+          applyDynamicExpressSlotStyle(slotEl, booking);
+        } else {
+          slotEl.className = 'stall-slot stall-slot-exp cursor-default select-none pointer-events-none bg-slate-200 hover:bg-slate-200 p-0.5 flex flex-col justify-center items-center text-center border-2 border-slate-400 rounded-[2px] shadow-xs text-slate-800';
+          slotEl.innerHTML = '<span class="text-[9px] sm:text-[10px] font-black text-slate-800 uppercase tracking-wider select-none">Kosong</span>';
+        }
+      });
+
+      // Update counter slot
+      const maxSlots = isTvDateSat ? 22 : 30;
+      const usageEl = document.getElementById('slotUsageDisplay');
+      if (usageEl) {
+        usageEl.innerHTML = `${filledSlotsCount} / ${maxSlots} <span class="text-xs text-slate-400 font-normal">(${Math.round((filledSlotsCount/maxSlots)*100)}%)</span>`;
+      }
+
+      // Update ringkasan operasional
+      const tvHoursEl = document.getElementById('tvOperatingHoursDisplay');
+      const tvDurationEl = document.getElementById('tvOperatingDurationDisplay');
+      if (tvHoursEl) {
+        tvHoursEl.innerText = isTvDateSat ? '08.30 – 14.30' : '08.30 – 16.30';
+      }
+      if (tvDurationEl) {
+        tvDurationEl.innerText = isTvDateSat 
+          ? 'Total durasi 6 jam operasional' 
+          : 'Total durasi 8 jam operasional';
+      }
+
+      // Update banner siaran jika ada antrean aktif
+      const activeCallBannerText = document.getElementById('activeCallText');
+      if (activeCallBannerText) {
+        const inProgress = bookings.find(b => b.status === 'In Progress');
+        const checkedIn = bookings.find(b => b.status === 'Checked In');
+        const firstBooked = bookings.find(b => b.status === 'Booked');
+        const currentActive = inProgress || checkedIn || firstBooked;
+
+        if (currentActive) {
+          updateTvActiveCall(currentActive);
+        } else {
+          activeCallBannerText.innerText = 'SELAMAT DATANG DI POLYTRON SERVICE CENTER • SILAKAN LAPOR KE SA UNTUK CHECK-IN ANTREAN';
+        }
+      }
+
+      if (window.lucide && lucide.createIcons) lucide.createIcons();
+    }
+
+    function formatSlotHtml(booking) {
+      let badgeTag = '';
+      if (booking.status === 'Checked In') {
+        badgeTag = '<span class="text-[8px] bg-amber-400 text-slate-950 px-1 font-black rounded-[2px]">TIBA</span>';
+      }
+      return `
+        <div class="w-full px-0.5 flex flex-col justify-center items-center text-center leading-tight">
+          <div class="flex items-center gap-1 justify-center max-w-full">
+            <span class="font-black text-[11px] sm:text-xs text-white tracking-tight leading-tight uppercase select-none">${booking.plate || '-'}</span>
+            ${badgeTag}
+          </div>
+          <div class="text-[9px] sm:text-[10px] text-slate-200 truncate max-w-full leading-tight select-none mt-0.5">${(booking.model || '').replace('Polytron ', '')}</div>
+          <div class="text-[8px] sm:text-[9px] font-mono font-bold text-amber-200 leading-none select-none mt-0.5">${booking.queueNumber || ''}</div>
+        </div>
+      `;
+    }
+
+    function applyDynamicSlotStyle(el, status) {
+      if (status === 'Checked In') {
+        el.className = 'stall-slot stall-slot-reg stall-checked-in cursor-default select-none pointer-events-none bg-amber-600 border-2 border-amber-300 text-slate-950 p-0.5 flex flex-col justify-center items-center text-center shadow-lg rounded-[2px]';
+      } else if (status === 'In Progress') {
+        el.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-cyan-800 border-2 border-cyan-400 text-white p-0.5 flex flex-col justify-center items-center text-center shadow-lg rounded-[2px]';
+      } else if (status === 'Done') {
+        el.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-emerald-800 border border-emerald-400 text-white p-0.5 flex flex-col justify-center items-center text-center shadow rounded-[2px]';
+      } else {
+        el.className = 'stall-slot stall-slot-reg cursor-default select-none pointer-events-none bg-indigo-900 border border-indigo-500 text-white p-0.5 flex flex-col justify-center items-center text-center shadow rounded-[2px]';
+      }
+    }
+
+    function applyDynamicExpressSlotStyle(el, booking) {
+      let bg = 'bg-indigo-900 border-indigo-500';
+      if (booking.status === 'Checked In') bg = 'bg-amber-600 border-amber-300 stall-checked-in';
+      if (booking.status === 'In Progress') bg = 'bg-cyan-800 border-cyan-400';
+      if (booking.status === 'Done') bg = 'bg-emerald-800 border-emerald-400';
+
+      let badgeTag = '';
+      if (booking.status === 'Checked In') {
+        badgeTag = '<span class="text-[7px] sm:text-[8px] bg-amber-400 text-slate-950 px-1 font-black rounded-[2px] leading-tight">TIBA</span>';
+      }
+
+      el.className = `stall-slot stall-slot-exp cursor-default select-none pointer-events-none ${bg} border p-0.5 flex flex-col items-center justify-center text-center text-white shadow-xs rounded-[2px]`;
+      el.innerHTML = `
+        <div class="w-full px-0.5 flex flex-col justify-center items-center text-center leading-tight">
+          <div class="flex items-center gap-1 justify-center max-w-full">
+            <span class="font-black text-[9px] sm:text-[10px] text-white tracking-tight leading-tight uppercase select-none">${booking.plate || '-'}</span>
+            ${badgeTag}
+          </div>
+          <div class="text-[8px] text-slate-200 truncate max-w-full leading-tight select-none mt-0.5">${(booking.model || '').replace('Polytron ', '')}</div>
+          <div class="text-[7px] sm:text-[8px] font-mono font-bold text-amber-200 leading-none select-none mt-0.5">${booking.queueNumber || ''}</div>
+        </div>
+      `;
+    }
+
+    // ==============================================================
+    // REALTIME CROSS-DEVICE SYNC (MQTT & BROADCAST CHANNEL)
+    // ==============================================================
+    const LOCAL_DEVICE_ID = 'tv_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+    let mqttClient = null;
+
+    function initRealtimeSync() {
+      // 1. BroadcastChannel antar tab
+      try {
+        if ('BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('polytron_ev_sync_channel');
+          bc.onmessage = (event) => {
+            handleIncomingSyncMessage(event.data);
+          };
+        }
+      } catch (e) {}
+
+      // 2. Storage event
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'POLYTRON_REMOTE_CALL_EVENT') {
+          try {
+            const data = JSON.parse(e.newValue);
+            if (data) handleIncomingSyncMessage(data);
+          } catch (err) {}
+        } else if (e.key === STORAGE_KEY) {
+          renderSimulasiGrid();
+        }
+      });
+
+      // 3. MQTT over WebSocket untuk komunikasi HP <-> TV Monitor
+      initMqttClient();
+    }
+
+    function initMqttClient() {
+      if (typeof mqtt === 'undefined') return;
+
+      try {
+        const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+        const clientId = 'polytron_tv_' + Math.random().toString(16).substring(2, 10);
+        
+        mqttClient = mqtt.connect(brokerUrl, {
+          clientId: clientId,
+          clean: true,
+          connectTimeout: 5000,
+          reconnectPeriod: 3000,
+          keepalive: 30
+        });
+
+        const topicCall = 'polytron/ev_service/voice_call';
+        const topicData = 'polytron/ev_service/data_sync';
+
+        mqttClient.on('connect', () => {
+          console.log('✅ Monitor TV MQTT Connected to EMQX Broker');
+          mqttClient.subscribe([topicCall, topicData]);
+        });
+
+        mqttClient.on('message', (topic, message) => {
+          try {
+            const payload = JSON.parse(message.toString());
+            handleIncomingSyncMessage(payload);
+          } catch (err) {}
+        });
+      } catch (e) {}
+    }
+
+    function handleIncomingSyncMessage(payload) {
+      if (!payload || typeof payload !== 'object') return;
+      if (payload.deviceId === LOCAL_DEVICE_ID) return;
+
+      if (payload.type === 'voice_call') {
+        const { text, booking } = payload;
+        if (text) {
+          announceVoice(text, booking);
+        }
+      } else if (payload.type === 'data_sync') {
+        if (payload.bookings && Array.isArray(payload.bookings)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.bookings));
+          renderSimulasiGrid();
+        }
+      }
+    }
+
+    // ==============================================================
+    // SYNC DATA GOOGLE SHEETS SECARA OTOMATIS
+    // ==============================================================
+    async function fetchDataFromGoogleSheet() {
+      const gasUrl = DEFAULT_GAS_URL;
+      if (!gasUrl) return;
+
+      let sheetRows = null;
+
+      try {
+        const res = await fetch(`${gasUrl}${gasUrl.includes('?') ? '&' : '?'}action=getData&_t=${Date.now()}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.bookings) sheetRows = json.bookings;
+        }
+      } catch (e) {}
+
+      if (sheetRows && Array.isArray(sheetRows) && sheetRows.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sheetRows));
+        renderSimulasiGrid();
+      }
+    }
+
+    // ==============================================================
+    // FULLSCREEN / LAYAR PENUH TOGGLE
+    // ==============================================================
+    function toggleFullScreen() {
+      autoUnlockAudioEngine();
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          document.documentElement.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenState);
+
+    function updateFullscreenState() {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      const fsIcon = document.getElementById('fsIcon');
+      const fsBtn = document.getElementById('btnFullscreenToggle');
+      if (fsIcon) {
+        fsIcon.setAttribute('data-lucide', isFs ? 'minimize' : 'maximize');
+      }
+      if (fsBtn) {
+        const span = fsBtn.querySelector('span');
+        if (span) span.innerText = isFs ? 'Keluar Full' : 'Layar Penuh';
+      }
+      if (window.lucide && lucide.createIcons) lucide.createIcons();
+    }
+
+    // ==============================================================
+    // INISIALISASI SAAT HALAMAN DIMUAT
+    // ==============================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      autoUnlockAudioEngine();
+      updateLiveClock();
+      setInterval(updateLiveClock, 1000);
+      
+      renderSimulasiGrid();
+      setInterval(renderSimulasiGrid, 15000);
+
+      initRealtimeSync();
+
+      // Sinkronisasi data Google Sheets tiap 30 detik
+      setTimeout(fetchDataFromGoogleSheet, 1500);
+      setInterval(fetchDataFromGoogleSheet, 30000);
+
+      if (window.lucide && lucide.createIcons) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
